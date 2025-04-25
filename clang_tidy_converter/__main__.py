@@ -22,7 +22,7 @@ def create_argparser():
     html.add_argument('-s', '--software_name', default='', help='software name to display in generated report')
 
     p.add_argument("-e", "--diagnostic_exclude_regex", default=None, help="exclude errors that match regex")
-    p.add_argument("-d", "--exclude_duplicates", default=False, help="exclude duplicate errors")
+    p.add_argument("-d", "--exclude_duplicates", action='store_true', default=False, help="exclude duplicate errors")
     p.add_argument("-f", "--exclude_file_filter", default=None, help="exclude files that match regex")
 
     sq = sub.add_parser("sq", help="SonarQube JSON")
