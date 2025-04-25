@@ -40,11 +40,14 @@ class ClangTidyParser:
     MESSAGE_REGEX = re.compile(r"^(?P<filepath>.+):(?P<line>\d+):(?P<column>\d+): (?P<level>\S+): (?P<message>.*?)( \[(?P<diagnostic_name>.*)\])?$")
     IGNORE_REGEX = re.compile(r"^error:.*$")
 
-    def __init__(self):
-        pass
+    def __init__(self, diagnostic_exclude_regex = None, exclude_duplicates = False):
+        self.diagnostic_exclude_regex = diagnostic_exclude_regex
+        self.exclude_duplicates = exclude_duplicates
 
     def parse(self, lines):
         messages = []
+        seen_messages = set()  # Track duplicate messages
+        
         for line in lines:
             if self._is_ignored(line):
                 continue
@@ -55,12 +58,28 @@ class ClangTidyParser:
                 else:
                     continue
             else:
+                # Check for duplicates if exclude_duplicates is enabled
+                if self.exclude_duplicates:
+                    message_key = (message.filepath, message.line, message.column, message.diagnostic_name)
+                    if message_key in seen_messages:
+                        continue
+                    seen_messages.add(message_key)
+                
                 messages.append(message)
+                
         return self._group_messages(messages)
 
     def _parse_message(self, line):
         regex_res = self.MESSAGE_REGEX.match(line)
         if regex_res is not None:
+            level_name = regex_res.group('level')
+            if level_name is not None and ClangMessage.levelFromString(level_name) == ClangMessage.Level.NOTE:
+                return None
+            
+            diagnostic_name = regex_res.group('diagnostic_name')
+            if diagnostic_name is not None and self.diagnostic_exclude_regex is not None and re.search("%s" % self.diagnostic_exclude_regex, diagnostic_name):
+                return None
+
             return ClangMessage(
                         filepath=regex_res.group('filepath'),
                         line=int(regex_res.group('line')),

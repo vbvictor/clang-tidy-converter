@@ -21,13 +21,16 @@ def create_argparser():
     html = sub.add_parser("html", help="HTML report")
     html.add_argument('-s', '--software_name', default='', help='software name to display in generated report')
 
+    p.add_argument("-e", "--diagnostic_exclude_regex", default=None, help="exclude errors from given warning that match regex")
+    p.add_argument("-d", "--exclude_duplicates", default=False, help="exclude duplicate errors")
+
     sq = sub.add_parser("sq", help="SonarQube JSON")
     sarif = sub.add_parser("sarif", help="SARIF JSON")
 
     return p
 
 def main(args):
-    parser = ClangTidyParser()
+    parser = ClangTidyParser(args.diagnostic_exclude_regex, bool(args.exclude_duplicates))
     messages = parser.parse(sys.stdin.readlines())
 
     if len(args.project_root) > 0:
