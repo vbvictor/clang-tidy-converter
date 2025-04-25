@@ -128,6 +128,88 @@ class ClangTidyParserTest(unittest.TestCase):
         self.assertEqual(1, len(messages))
         msg = messages[0]
         self.assertEqual('clang-analyzer-core.NullDereference', msg.diagnostic_name)
+    
+    def test_exclude_file_filter_exact_match(self):
+        parser = ClangTidyParser(exclude_file_filter="/usr/lib/include/some_include.h$")
+        messages = parser.parse([
+            '/usr/lib/include/some_include.h:1039:3: warning: Potential memory leak [clang-analyzer-cplusplus.NewDeleteLeaks]',
+            '/usr/lib/include/other_include.h:1040:3: warning: Some other issue [clang-analyzer-core.NullDereference]'
+        ])
+        self.assertEqual(1, len(messages))
+        msg = messages[0]
+        self.assertEqual('/usr/lib/include/other_include.h', msg.filepath)
+
+    def test_exclude_file_filter_partial_match(self):
+        parser = ClangTidyParser(exclude_file_filter="some_include")
+        messages = parser.parse([
+            '/usr/lib/include/some_include.h:1039:3: warning: Potential memory leak [clang-analyzer-cplusplus.NewDeleteLeaks]',
+            '/usr/lib/include/some_include2.h:1040:3: warning: Another issue [clang-analyzer-core.NullDereference]',
+            '/usr/lib/include/other_include.h:1041:3: warning: Some other issue [modernize-use-nullptr]'
+        ])
+        self.assertEqual(1, len(messages))
+        msg = messages[0]
+        self.assertEqual('/usr/lib/include/other_include.h', msg.filepath)
+
+    def test_exclude_file_filter_directory_match(self):
+        parser = ClangTidyParser(exclude_file_filter="/include/")
+        messages = parser.parse([
+            '/usr/lib/include/some_file.h:1039:3: warning: Potential memory leak [clang-analyzer-cplusplus.NewDeleteLeaks]',
+            '/usr/lib/include/other_file.h:1039:3: warning: Potential memory leak [clang-analyzer-cplusplus.NewDeleteLeaks]',
+            '/usr/src/file.cpp:1040:3: warning: Some other issue [clang-analyzer-core.NullDereference]'
+        ])
+        self.assertEqual(1, len(messages))
+        msg = messages[0]
+        self.assertEqual('/usr/src/file.cpp', msg.filepath)
+
+    def test_exclude_file_filter_directory_match(self):
+        parser = ClangTidyParser(exclude_file_filter="(usr/include|path/to/)")
+        messages = parser.parse([
+            '/usr/include/include/some_file.h:1039:3: warning: Potential memory leak [clang-analyzer-cplusplus.NewDeleteLeaks]',
+            '/usr/lib/include/other_file.h:1039:3: warning: Potential memory leak [clang-analyzer-cplusplus.NewDeleteLeaks]',
+            '../../path/to/other_file.h:1039:3: warning: Potential memory leak [clang-analyzer-cplusplus.NewDeleteLeaks]',
+            '/usr/src/file.cpp:1040:3: warning: Some other issue [clang-analyzer-core.NullDereference]'
+        ])
+        self.assertEqual(2, len(messages))
+        self.assertEqual('/usr/lib/include/other_file.h', messages[0].filepath)
+        self.assertEqual('/usr/src/file.cpp', messages[1].filepath)
+
+    def test_exclude_file_filter_extension_match(self):
+        parser = ClangTidyParser(exclude_file_filter="\.h$")
+        messages = parser.parse([
+            '/usr/lib/include/some_file.h:1039:3: warning: Potential memory leak [clang-analyzer-cplusplus.NewDeleteLeaks]',
+            '/usr/src/file.cpp:1040:3: warning: Some other issue [clang-analyzer-core.NullDereference]'
+        ])
+        self.assertEqual(1, len(messages))
+        msg = messages[0]
+        self.assertEqual('/usr/src/file.cpp', msg.filepath)
+
+    def test_exclude_file_filter_no_match(self):
+        parser = ClangTidyParser(exclude_file_filter="non_existent_pattern")
+        messages = parser.parse([
+            '/usr/lib/include/some_file.h:1039:3: warning: Potential memory leak [clang-analyzer-cplusplus.NewDeleteLeaks]',
+            '/usr/src/file.cpp:1040:3: warning: Some other issue [clang-analyzer-core.NullDereference]'
+        ])
+        self.assertEqual(2, len(messages))
+
+    def test_exclude_file_filter_with_other_filters(self):
+        parser = ClangTidyParser(
+            diagnostic_exclude_regex="NullDereference",
+            exclude_duplicates=True,
+            exclude_file_filter="\.h$"
+        )
+        messages = parser.parse([
+            '/usr/lib/include/some_file.h:1039:3: warning: Potential memory leak [clang-analyzer-cplusplus.NewDeleteLeaks]',
+            '/usr/src/file1.cpp:1040:3: warning: Some issue [clang-analyzer-core.NullDereference]',
+            '/usr/src/file2.cpp:1041:3: warning: Another issue [modernize-use-nullptr]',
+            '/usr/src/file2.cpp:1041:3: warning: Another issue [modernize-use-nullptr]',
+            '/usr/src/file3.cpp:1042:3: warning: Final issue [modernize-use-auto]'
+        ])
+        
+        self.assertEqual(2, len(messages))  # Only the non-duplicate cpp files should remain
+        self.assertEqual('/usr/src/file2.cpp', messages[0].filepath)
+        self.assertEqual('modernize-use-nullptr', messages[0].diagnostic_name)
+        self.assertEqual('/usr/src/file3.cpp', messages[1].filepath)
+        self.assertEqual('modernize-use-auto', messages[1].diagnostic_name)
 
     def test_remark_message_level(self):
         parser = ClangTidyParser()

@@ -40,9 +40,10 @@ class ClangTidyParser:
     MESSAGE_REGEX = re.compile(r"^(?P<filepath>.+):(?P<line>\d+):(?P<column>\d+): (?P<level>\S+): (?P<message>.*?)( \[(?P<diagnostic_name>.*)\])?$")
     IGNORE_REGEX = re.compile(r"^error:.*$")
 
-    def __init__(self, diagnostic_exclude_regex = None, exclude_duplicates = False):
+    def __init__(self, diagnostic_exclude_regex=None, exclude_duplicates=False, exclude_file_filter=None):
         self.diagnostic_exclude_regex = diagnostic_exclude_regex
         self.exclude_duplicates = exclude_duplicates
+        self.exclude_file_filter = exclude_file_filter
 
     def parse(self, lines):
         messages = []
@@ -72,6 +73,10 @@ class ClangTidyParser:
     def _parse_message(self, line):
         regex_res = self.MESSAGE_REGEX.match(line)
         if regex_res is not None:
+            filepath = regex_res.group('filepath')
+            if filepath is not None and self.exclude_file_filter is not None and re.search(self.exclude_file_filter, filepath):
+                return None
+          
             level_name = regex_res.group('level')
             if level_name is not None and ClangMessage.levelFromString(level_name) == ClangMessage.Level.NOTE:
                 return None
@@ -89,7 +94,6 @@ class ClangTidyParser:
                         diagnostic_name=regex_res.group('diagnostic_name')
                    )
         return None
-
     def _is_ignored(self, line):
         return self.IGNORE_REGEX.match(line) is not None
 
