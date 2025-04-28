@@ -6,7 +6,7 @@ import html
 import re
 
 
-NEWLINE = '\n';
+NEWLINE = '\n'
 
 
 class HTMLReportFormatter:
@@ -14,7 +14,10 @@ class HTMLReportFormatter:
         pass
 
     def format(self, messages, args):
-        by_level = _group_messages(messages)
+      # Sort messages by diagnostic name alphabetically
+        sorted_messages = sorted(messages, key=lambda msg: msg.diagnostic_name)
+          
+        by_level = _group_messages(sorted_messages)
 
         title = "Static Analysis Results"
         if len(args.software_name) > 0:
@@ -54,13 +57,12 @@ class HTMLReportFormatter:
   <td class="Q">Notes</td>
 </tr></thead>
 <tbody>
-{NEWLINE.join(_format_message(msg) for msg in messages)}
+{NEWLINE.join(_format_message(msg) for msg in sorted_messages)}
 </tbody>
 </table>
 
 </body></html>
 """
-
 
 def _group_messages(messages):
     groupped = _group_messages_by_level(messages)
@@ -78,7 +80,8 @@ def _group_messages_by_diagnostic_name(messages):
     groupped = defaultdict(list)
     for m in messages:
         groupped[m.diagnostic_name].append(m)
-    return groupped
+    # Return dictionary with sorted keys to ensure alphabetical order
+    return dict(sorted(groupped.items()))
 
 
 def _format_level_group(level, messages):
